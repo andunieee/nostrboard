@@ -1,2 +1,2 @@
 dev:
-    trunk serve --open
+    trunk serve

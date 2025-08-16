@@ -8,4 +8,6 @@ rustflags = [
 rustflags = [
    "--cfg",
    "erase_components",
+  "--cfg",
+  "getrandom_backend=\"wasm_js\""
 ]
