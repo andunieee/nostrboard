@@ -5,7 +5,7 @@ edition = "2024"
 
 [dependencies]
 console_error_panic_hook = "0.1.7"
-leptos = { version = "0.8.6", features = ["csr"] }
+leptos = { version = "0.8.6", features = ["csr", "nightly"] }
 ritual = { path = "../ritual" }
 console_log = { version = "1", features = ["color"] }
 log = "0.4"

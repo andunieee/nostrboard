@@ -19,16 +19,14 @@ fn App() -> impl IntoView {
             .unwrap();
 
     view! {
-        <div class="min-h-screen bg-white text-black font-mono text-sm">
-            <header class="border-b border-gray-200 bg-white">
+        <div class="min-h-screen font-mono text-sm">
+            <header class="border-b border-purple-200 bg-purple-400/20">
                 <div class="mx-auto px-4 py-4">
-                    <h1 class="text-2xl font-bold text-black">"Nostr Dashboard"</h1>
+                    <h1 class="text-2xl font-bold font-sans">"Nostr Dashboard"</h1>
                 </div>
             </header>
             <main class="mx-auto px-4 py-6">
-                <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 xl:grid-cols-10 gap-4">
-                    <MetadataSection pubkey=pubkey />
-                </div>
+                <MetadataSection pubkey=pubkey />
             </main>
         </div>
     }
@@ -36,7 +34,7 @@ fn App() -> impl IntoView {
 
 #[component]
 fn MetadataSection(pubkey: ritual::PubKey) -> impl IntoView {
-    let (metadata, set_metadata) = signal::<Option<Metadata>>(None);
+    let (metadata_reader, metadata_writer) = signal::<Option<Metadata>>(None);
 
     let filter = Filter {
         kinds: Some(vec![0.into()]),
@@ -65,7 +63,9 @@ fn MetadataSection(pubkey: ritual::PubKey) -> impl IntoView {
                 log::info!("got occurrence: {:?}", occ);
                 match occ {
                     Occurrence::Event(event) => match ritual::Metadata::from_event(&event) {
-                        Ok(metadata) => set_metadata.set(Some(metadata)),
+                        Ok(metadata) => {
+                            metadata_writer.set(Some(metadata));
+                        }
                         _ => {}
                     },
                     _ => {}
@@ -74,34 +74,54 @@ fn MetadataSection(pubkey: ritual::PubKey) -> impl IntoView {
         });
     });
 
+    let values = move || {
+        let metadata_read = metadata_reader.get();
+        log::info!("new: {:?}", metadata_read);
+        let mut values = vec![
+            ("hex public key", pubkey.to_hex()),
+            ("npub", pubkey.to_npub()),
+        ];
+
+        match metadata_read {
+            None => {}
+            Some(metadata) => {
+                if let Some(name) = &metadata.name {
+                    values.push(("name", name.clone()));
+                }
+            }
+        };
+
+        values
+    };
+
     view! {
         <>
-            <DataCard title="PUBKEY" value=pubkey.to_hex() subtitle=Some(pubkey.to_npub()) />
-            <Show when=move || { metadata.get().is_some() }>
-                <DataCard
-                    title="NAME"
-                    value=metadata.get().unwrap().name.unwrap_or("".to_string())
-                    subtitle=None
-                />
-                <DataCard
-                    title="ABOUT"
-                    value=metadata.get().unwrap().about.unwrap_or("".to_string())
-                    subtitle=None
-                />
-            </Show>
+            <DataCard title="ACCOUNT DATA" values=values />
         </>
     }
 }
 
 #[component]
-fn DataCard(title: &'static str, value: String, subtitle: Option<String>) -> impl IntoView {
+fn DataCard(
+    title: &'static str,
+    values: impl Fn() -> Vec<(&'static str, String)>,
+) -> impl IntoView {
     view! {
-        <div class="bg-white border border-gray-200 p-1 hover:border-gray-300 transition-colors">
-            <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
+        <div class="bg-black border border-purple-200 p-1 hover:border-gray-50 transition-colors">
+            <h3 class="text-xs font-semibold text-gray-200 uppercase tracking-wide mb-1">
                 {title}
             </h3>
-            <div class="text-sm text-black">{value}</div>
-            {subtitle.map(|s| view! { <div class="text-xs text-gray-500 mt-1">{s}</div> })}
+            {values()
+                .into_iter()
+                .map(|(k, v)| {
+                    view! {
+                        <div class="text-sm text-gray-300 flex justify-between">
+                            <div>{k}</div>
+                            <div>{v.as_str()}</div>
+                        </div>
+                    }
+                })
+                .collect::<Vec<_>>()}
         </div>
     }
 }
