@@ -1985,6 +1985,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "redb"
+version = "3.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "225e8bf881033e020ed87e9f10fc6254cf3ebab8d440e6fbb4c7b34bec2a0543"
+dependencies = [
+ "libc",
+]
+
+[[package]]
 name = "redox_syscall"
 version = "0.5.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2110,6 +2119,7 @@ dependencies = [
  "lmdb-master-sys",
  "log",
  "lowercase-hex",
+ "redb",
  "regex",
  "reqwest",
  "rkyv",
