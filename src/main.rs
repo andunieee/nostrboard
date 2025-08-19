@@ -27,6 +27,7 @@ fn App() -> impl IntoView {
             </header>
             <main class="mx-auto px-4 py-6">
                 <MetadataSection pubkey=pubkey />
+                <RelayListSection pubkey=pubkey />
             </main>
         </div>
     }
@@ -36,14 +37,13 @@ fn App() -> impl IntoView {
 fn MetadataSection(pubkey: ritual::PubKey) -> impl IntoView {
     let (metadata_reader, metadata_writer) = signal::<Option<Metadata>>(None);
 
-    let filter = Filter {
-        kinds: Some(vec![0.into()]),
-        authors: Some(vec![pubkey.clone()]),
-        ..Default::default()
-    };
-
     let _ = Effect::new(move || {
-        let filter = filter.clone();
+        let filter = Filter {
+            kinds: Some(vec![0.into()]),
+            authors: Some(vec![pubkey.clone()]),
+            limit: Some(1),
+            ..Default::default()
+        };
 
         spawn_local(async move {
             let mut occurrences = POOL
@@ -61,7 +61,7 @@ fn MetadataSection(pubkey: ritual::PubKey) -> impl IntoView {
 
             while let Some(occ) = occurrences.recv().await {
                 match occ {
-                    Occurrence::Event(event) => match ritual::Metadata::from_event(&event) {
+                    Occurrence::Event(event, _) => match ritual::Metadata::from_event(&event) {
                         Ok(metadata) => {
                             metadata_writer.set(Some(metadata));
                         }
@@ -113,17 +113,84 @@ fn MetadataSection(pubkey: ritual::PubKey) -> impl IntoView {
         values
     };
 
-    view! {
-        <>
-            <DataCard title="ACCOUNT DATA" values=values />
-        </>
-    }
+    view! { <DataCard title="ACCOUNT DATA" values=values /> }
+}
+
+#[component]
+fn RelayListSection(pubkey: ritual::PubKey) -> impl IntoView {
+    let (write_relays_reader, write_relays_writer) = signal::<Option<Vec<String>>>(None);
+    let (read_relays_reader, read_relays_writer) = signal::<Option<Vec<String>>>(None);
+
+    let _ = Effect::new(move || {
+        let filter = Filter {
+            kinds: Some(vec![10002.into()]),
+            authors: Some(vec![pubkey.clone()]),
+            limit: Some(1),
+            ..Default::default()
+        };
+
+        spawn_local(async move {
+            let mut occurrences = POOL
+                .subscribe(
+                    vec![
+                        "purplepag.es".to_string(),
+                        "relay.nos.social".to_string(),
+                        "relay.primal.net".to_string(),
+                        "relay.damus.io".to_string(),
+                    ],
+                    filter,
+                    ritual::SubscriptionOptions::default(),
+                )
+                .await;
+
+            while let Some(occ) = occurrences.recv().await {
+                match occ {
+                    Occurrence::Event(event, relay) => {
+                        log::info!("event {:?} from {:?}", event, relay);
+                        let mut read_list = Vec::with_capacity(event.tags.0.len());
+                        let mut write_list = Vec::with_capacity(event.tags.0.len());
+                        for tag in event.tags.iter() {
+                            if tag.len() >= 2 && tag[0] == "r" {
+                                if tag.len() == 2 {
+                                    read_list.push(tag[1].clone());
+                                    write_list.push(tag[1].clone());
+                                } else if tag[2] == "write" {
+                                    write_list.push(tag[1].clone());
+                                } else if tag[2] == "read" {
+                                    read_list.push(tag[1].clone());
+                                }
+                            }
+                        }
+                        read_relays_writer.set(Some(read_list));
+                        write_relays_writer.set(Some(write_list));
+                    }
+                    _ => {}
+                }
+            }
+        });
+    });
+
+    let values = move || {
+        let mut values = Vec::with_capacity(2);
+
+        if let Some(read) = read_relays_reader() {
+            values.push(("read", DataValue::List(read)));
+        }
+        if let Some(write) = write_relays_reader() {
+            values.push(("write", DataValue::List(write)));
+        }
+
+        values
+    };
+
+    view! { <DataCard title="BASIC RELAYS" values=values /> }
 }
 
 #[derive(Clone, Debug)]
 enum DataValue {
     Text(String),
     Image(String),
+    List(Vec<String>),
 }
 
 #[component]
@@ -134,7 +201,7 @@ fn DataCard(
     let (toggled_reader, toggled_writer) = signal::<Option<usize>>(None);
 
     view! {
-        <div class="bg-black border border-purple-200 p-1 hover:border-gray-50 transition-colors w-96">
+        <div class="bg-black border border-purple-200 p-1 my-2 hover:border-gray-50 transition-colors w-96">
             <h3 class="text-xs font-semibold text-gray-200 uppercase tracking-wide mb-1">
                 {title}
             </h3>
@@ -186,6 +253,24 @@ fn DataCard(
                                             }
                                         >
                                             <img class="h-full" src=url />
+                                        </div>
+                                    }
+                                }
+                                DataValue::List(items) => {
+                                    view! {
+                                        <div
+                                            class="h-full overflow-hidden text-ellipsis flex"
+                                            class:whitespace-pre-wrap=opened
+                                            class:break-all=opened
+                                            class:flex-col=opened
+                                            class:gap-2=closed
+                                        >
+                                            {items
+                                                .into_iter()
+                                                .map(|text| {
+                                                    view! { <span>{text}</span> }
+                                                })
+                                                .collect_view()}
                                         </div>
                                     }
                                 }
